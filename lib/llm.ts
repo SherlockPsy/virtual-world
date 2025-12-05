@@ -9,24 +9,52 @@ const openai = new OpenAI({
 
 const MODEL = process.env.OPENAI_MODEL || 'gpt-4o';
 
+// Get the base directory - handles both dev and production (standalone)
+function getBaseDir(): string {
+  // In standalone mode, files are relative to the .next/standalone directory
+  // Try multiple possible locations
+  const possiblePaths = [
+    process.cwd(), // Standard location
+    path.join(process.cwd(), '..'), // One level up
+    '/app', // Docker/Railway common location
+  ];
+  
+  for (const basePath of possiblePaths) {
+    const testPath = path.join(basePath, 'prompts', 'SYSTEM_PROMPT_VIRLIFE.md');
+    if (fs.existsSync(testPath)) {
+      return basePath;
+    }
+  }
+  
+  return process.cwd();
+}
+
 // Load prompt files
 function loadPromptFile(filename: string): string {
-  const filePath = path.join(process.cwd(), 'prompts', filename);
+  const baseDir = getBaseDir();
+  const filePath = path.join(baseDir, 'prompts', filename);
   try {
-    return fs.readFileSync(filePath, 'utf-8');
-  } catch {
-    console.error(`Failed to load prompt file: ${filename}`);
+    console.log(`Loading prompt file from: ${filePath}`);
+    const content = fs.readFileSync(filePath, 'utf-8');
+    console.log(`Successfully loaded prompt file: ${filename} (${content.length} chars)`);
+    return content;
+  } catch (err) {
+    console.error(`Failed to load prompt file: ${filename} at ${filePath}`, err);
     return '';
   }
 }
 
 // Load data files
 function loadDataFile(filename: string): string {
-  const filePath = path.join(process.cwd(), 'data', filename);
+  const baseDir = getBaseDir();
+  const filePath = path.join(baseDir, 'data', filename);
   try {
-    return fs.readFileSync(filePath, 'utf-8');
-  } catch {
-    console.error(`Failed to load data file: ${filename}`);
+    console.log(`Loading data file from: ${filePath}`);
+    const content = fs.readFileSync(filePath, 'utf-8');
+    console.log(`Successfully loaded data file: ${filename} (${content.length} chars)`);
+    return content;
+  } catch (err) {
+    console.error(`Failed to load data file: ${filename} at ${filePath}`, err);
     return '';
   }
 }

@@ -13,6 +13,10 @@ const MODEL = process.env.OPENAI_MODEL || 'gpt-4o';
 // Identity enforcement enabled flag
 const IDENTITY_ENFORCEMENT_ENABLED = true;
 
+// Maximum number of regeneration attempts for identity enforcement
+// If Rebecca's output fails validation, regenerate up to this many times total
+const IDENTITY_MAX_ATTEMPTS = 3;
+
 // Get the base directory - handles both dev and production (standalone)
 function getBaseDir(): string {
   // In standalone mode, files are relative to the .next/standalone directory
@@ -118,11 +122,54 @@ function messagesToOpenAI(messages: Message[]): Array<{ role: 'user' | 'assistan
 }
 
 /**
+ * Build retry messages for identity enforcement fix.
+ * 
+ * When Rebecca's output fails identity validation, this function constructs
+ * new messages that explicitly tell the model WHAT was wrong (the validation issues)
+ * and HOW to fix it (by respecting fingerprint, linguistic engine, negative space).
+ * 
+ * The previous invalid output is included so the model can rewrite it.
+ */
+function buildRetryMessagesForIdentityFix(
+  previousMessages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }>,
+  lastOutput: string,
+  issues: string[]
+): Array<{ role: 'system' | 'user' | 'assistant'; content: string }> {
+  const issuesText = issues.join('; ');
+
+  return [
+    ...previousMessages,
+    {
+      role: 'system',
+      content:
+        'IDENTITY ENFORCEMENT: Your previous reply for Rebecca did not respect her identity, fingerprint, or linguistic engine. ' +
+        'You MUST now rewrite ONLY Rebecca\'s next reply so that it fully obeys: ' +
+        '1) her identity fingerprint, 2) her linguistic rules, 3) her negative-space constraints. ' +
+        'Do NOT change the scene facts, only how she speaks and behaves. ' +
+        'The validation issues were: ' +
+        issuesText +
+        '. Produce a new reply that would pass identity validation.'
+    },
+    {
+      role: 'assistant',
+      content: lastOutput
+    }
+  ];
+}
+
+/**
  * CALL 1 — WORLD OUTPUT (VISIBLE)
  * Generates the narrative world response that the user sees
  * 
  * IDENTITY ENFORCEMENT PIPELINE:
  * WORLD + SCENE CONTEXT → AGENT_INTENT_GENERATION → IDENTITY_ENFORCEMENT_LAYER → LINGUISTIC_ENGINE → OUTPUT_RENDER
+ * 
+ * HARD IDENTITY ENFORCEMENT GATE:
+ * When IDENTITY_ENFORCEMENT_ENABLED is true, Rebecca's output is validated against her
+ * identity fingerprint, linguistic engine, and negative-space constraints. If validation
+ * fails, the model is explicitly instructed to regenerate the output up to IDENTITY_MAX_ATTEMPTS
+ * times. Each retry includes the validation issues so the model knows exactly what to fix.
+ * Only after all attempts are exhausted (or validation passes) does the function return.
  */
 export async function generateWorldOutput(
   worldState: HydrationState,
@@ -131,34 +178,87 @@ export async function generateWorldOutput(
 ): Promise<string> {
   const systemPrompt = buildSystemPrompt(worldState);
   
-  const messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }> = [
+  // Initial messages for the first generation attempt
+  let messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }> = [
     { role: 'system', content: systemPrompt },
     ...messagesToOpenAI(conversationHistory),
     { role: 'user', content: userMessage }
   ];
 
-  const response = await openai.chat.completions.create({
-    model: MODEL,
-    messages,
-    temperature: 0.85,
-    max_tokens: 2000,
-  });
+  // If identity enforcement is disabled, do a single generation and return
+  if (!IDENTITY_ENFORCEMENT_ENABLED) {
+    const response = await openai.chat.completions.create({
+      model: MODEL,
+      messages,
+      temperature: 0.85,
+      max_tokens: 2000,
+    });
+    return response.choices[0]?.message?.content || '';
+  }
 
-  let output = response.choices[0]?.message?.content || '';
+  // HARD IDENTITY ENFORCEMENT LOOP:
+  // Generate Rebecca's reply, validate it, and regenerate if it fails validation.
+  // Up to IDENTITY_MAX_ATTEMPTS total attempts before accepting the output.
+  let finalOutput = '';
+  let lastValidation: { valid: boolean; issues: string[] } | null = null;
 
-  // IDENTITY VALIDATION - Check output against identity rules
-  if (IDENTITY_ENFORCEMENT_ENABLED) {
-    const validation = validateAgentOutput('rebecca', output);
-    if (!validation.valid) {
-      console.warn('Identity validation issues detected:', validation.issues);
-      // Log issues but don't block - the enforcement prompt should handle this
-      // In future, could trigger a regeneration here
-    } else {
-      console.log('Identity validation passed');
+  for (let attempt = 1; attempt <= IDENTITY_MAX_ATTEMPTS; attempt++) {
+    try {
+      const response = await openai.chat.completions.create({
+        model: MODEL,
+        messages,
+        temperature: 0.85,
+        max_tokens: 2000,
+      });
+
+      const output = response.choices[0]?.message?.content || '';
+
+      // Validate the output against Rebecca's identity
+      let validation: { valid: boolean; issues: string[] };
+      try {
+        validation = validateAgentOutput('rebecca', output);
+      } catch (validationError) {
+        // If validation itself throws, log error and accept the output
+        console.error('[IDENTITY] Validation threw an error, accepting output:', validationError);
+        finalOutput = output;
+        break;
+      }
+
+      lastValidation = validation;
+
+      if (validation.valid) {
+        console.log(`[IDENTITY] Rebecca output passed validation (attempt ${attempt}/${IDENTITY_MAX_ATTEMPTS})`);
+        finalOutput = output;
+        break;
+      }
+
+      // If invalid and attempts remain, prepare for regeneration
+      if (attempt < IDENTITY_MAX_ATTEMPTS) {
+        console.warn(
+          `[IDENTITY] Rebecca output failed validation (attempt ${attempt}/${IDENTITY_MAX_ATTEMPTS}). Issues:`,
+          validation.issues
+        );
+
+        // Modify the messages for the next attempt so the model REWRITES the reply
+        messages = buildRetryMessagesForIdentityFix(messages, output, validation.issues);
+        continue;
+      }
+
+      // Last attempt and still invalid - accept it but log error
+      console.error(
+        `[IDENTITY] Rebecca output failed validation after ${IDENTITY_MAX_ATTEMPTS} attempts. Using last attempt with issues:`,
+        validation.issues
+      );
+      finalOutput = output;
+
+    } catch (generationError) {
+      // If generation itself fails, log and rethrow (don't mask API errors)
+      console.error(`[IDENTITY] Generation failed on attempt ${attempt}:`, generationError);
+      throw generationError;
     }
   }
 
-  return output;
+  return finalOutput;
 }
 
 /**

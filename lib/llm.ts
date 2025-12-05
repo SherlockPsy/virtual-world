@@ -2,12 +2,16 @@ import OpenAI from 'openai';
 import { HydrationState, Message } from './models';
 import fs from 'fs';
 import path from 'path';
+import { buildIdentityEnforcementPrompt, validateAgentOutput } from './identity';
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY
 });
 
 const MODEL = process.env.OPENAI_MODEL || 'gpt-4o';
+
+// Identity enforcement enabled flag
+const IDENTITY_ENFORCEMENT_ENABLED = true;
 
 // Get the base directory - handles both dev and production (standalone)
 function getBaseDir(): string {
@@ -93,6 +97,15 @@ function buildSystemPrompt(worldState: HydrationState): string {
   // Append current world state (hidden from user, used by LLM)
   fullPrompt += `\n\n---\n\n## CURRENT_WORLD_STATE\n\n\`\`\`json\n${JSON.stringify(worldState, null, 2)}\n\`\`\`\n`;
 
+  // IDENTITY ENFORCEMENT LAYER - Inject identity enforcement context
+  if (IDENTITY_ENFORCEMENT_ENABLED) {
+    const identityEnforcement = buildIdentityEnforcementPrompt('rebecca');
+    if (identityEnforcement) {
+      fullPrompt += `\n\n${identityEnforcement}`;
+      console.log('Identity Enforcement Layer ACTIVE');
+    }
+  }
+
   return fullPrompt;
 }
 
@@ -107,6 +120,9 @@ function messagesToOpenAI(messages: Message[]): Array<{ role: 'user' | 'assistan
 /**
  * CALL 1 — WORLD OUTPUT (VISIBLE)
  * Generates the narrative world response that the user sees
+ * 
+ * IDENTITY ENFORCEMENT PIPELINE:
+ * WORLD + SCENE CONTEXT → AGENT_INTENT_GENERATION → IDENTITY_ENFORCEMENT_LAYER → LINGUISTIC_ENGINE → OUTPUT_RENDER
  */
 export async function generateWorldOutput(
   worldState: HydrationState,
@@ -128,7 +144,21 @@ export async function generateWorldOutput(
     max_tokens: 2000,
   });
 
-  return response.choices[0]?.message?.content || '';
+  let output = response.choices[0]?.message?.content || '';
+
+  // IDENTITY VALIDATION - Check output against identity rules
+  if (IDENTITY_ENFORCEMENT_ENABLED) {
+    const validation = validateAgentOutput('rebecca', output);
+    if (!validation.valid) {
+      console.warn('Identity validation issues detected:', validation.issues);
+      // Log issues but don't block - the enforcement prompt should handle this
+      // In future, could trigger a regeneration here
+    } else {
+      console.log('Identity validation passed');
+    }
+  }
+
+  return output;
 }
 
 /**

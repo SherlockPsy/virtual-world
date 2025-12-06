@@ -1,4 +1,4 @@
-// Type definitions for VirLife Stage 0
+// Type definitions for VirLife Stage 0.5
 
 export interface User {
   id: string;
@@ -27,25 +27,117 @@ export interface Message {
   created_at: Date;
 }
 
-// Hydration JSON schema (exact structure as per spec)
+// ============================================
+// STAGE 0.5: LOCATIONS
+// ============================================
+
+// House locations (indoor)
+export type HouseLocation = 
+  | 'house:kitchen'
+  | 'house:lounge'
+  | 'house:bedroom'
+  | 'house:hallway'
+  | 'house:bathroom'
+  | 'house:garden';
+
+// Outside locations (loose, semantic)
+export type OutsideLocation =
+  | 'outside:cafe'
+  | 'outside:park'
+  | 'outside:street'
+  | 'outside:shop';
+
+export type Location = HouseLocation | OutsideLocation;
+
+// House layout graph: which rooms connect to which
+export const HOUSE_CONNECTIONS: Record<HouseLocation, HouseLocation[]> = {
+  'house:kitchen': ['house:hallway', 'house:garden'],
+  'house:lounge': ['house:hallway'],
+  'house:bedroom': ['house:hallway', 'house:bathroom'],
+  'house:hallway': ['house:kitchen', 'house:lounge', 'house:bedroom', 'house:bathroom'],
+  'house:bathroom': ['house:hallway', 'house:bedroom'],
+  'house:garden': ['house:kitchen'],
+};
+
+// ============================================
+// STAGE 0.5: TIME OF DAY
+// ============================================
+
+export type TimeOfDay = 
+  | 'early_morning'   // ~6-9am
+  | 'late_morning'    // ~9am-12pm
+  | 'afternoon'       // ~12-5pm
+  | 'evening'         // ~5-9pm
+  | 'late_night';     // ~9pm-6am
+
+// ============================================
+// STAGE 0.5: REBECCA'S INTERNAL STATE (LIGHT)
+// ============================================
+
+export type EnergyLevel = 'rested' | 'tired';
+export type OpennessLevel = 'open' | 'reserved';
+export type FrictionLevel = 'calm' | 'slightly_tense';
+
+export interface RebeccaInternalState {
+  energy: EnergyLevel;
+  openness: OpennessLevel;
+  friction: FrictionLevel;
+}
+
+// ============================================
+// STAGE 0.5: CURRENT ACTIVITY
+// ============================================
+
+export interface CurrentActivity {
+  description: string;      // e.g., "making tea", "watching a film", "walking"
+  started_at?: string;      // optional timestamp when activity started
+}
+
+// ============================================
+// HYDRATION STATE (STAGE 0.5 EXTENDED)
+// ============================================
+
 export interface HydrationState {
+  // Time tracking
   time: {
     current_datetime: string;
     days_into_offgrid: number;
+    time_of_day: TimeOfDay;
   };
+  
+  // Location tracking
   locations: {
-    george: string;
-    rebecca: string;
+    george: Location;
+    rebecca: Location;
   };
+  
+  // Current activities
+  activities: {
+    george: CurrentActivity | null;
+    rebecca: CurrentActivity | null;
+    shared: CurrentActivity | null;  // activity they're doing together
+  };
+  
+  // Rebecca's internal state (not exposed to user)
+  rebecca_internal: RebeccaInternalState;
+  
+  // Relationship dynamics
   relationship: {
     overall_tone: string;
     recent_key_moments: string[];
   };
+  
+  // Ongoing narrative threads
   threads: string[];
+  
+  // Accumulated facts
   facts: {
     shared: string[];
     rebecca_about_george: string[];
   };
+  
+  // Recent places visited (semantic, for continuity)
+  recent_places: Location[];
 }
 
 // API request/response types

@@ -3,6 +3,7 @@ import { HydrationState, Message } from './models';
 import fs from 'fs';
 import path from 'path';
 import { buildIdentityEnforcementPrompt, validateAgentOutput } from './identity';
+import { buildWorldContext } from './worldState';
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY
@@ -100,6 +101,10 @@ function buildSystemPrompt(worldState: HydrationState): string {
 
   // Append current world state (hidden from user, used by LLM)
   fullPrompt += `\n\n---\n\n## CURRENT_WORLD_STATE\n\n\`\`\`json\n${JSON.stringify(worldState, null, 2)}\n\`\`\`\n`;
+
+  // STAGE 0.5: Append human-readable world context summary
+  const worldContext = buildWorldContext(worldState);
+  fullPrompt += `\n\n---\n\n## WORLD CONTEXT SUMMARY\n\n${worldContext}\n`;
 
   // IDENTITY ENFORCEMENT LAYER - Inject identity enforcement context
   if (IDENTITY_ENFORCEMENT_ENABLED) {

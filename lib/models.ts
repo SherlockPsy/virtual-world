@@ -121,6 +121,13 @@ export interface HydrationState {
   // Rebecca's internal state (not exposed to user)
   rebecca_internal: RebeccaInternalState;
   
+  // NEW: Rebecca Expression Engine state (serialized JSON string)
+  // This is the full semantic state from RebeccaStateMachine.ts
+  // Stores: mood_label, energy_label, trust_with_you, comfort_with_context,
+  //         intimacy_band, social_context, cognitive_load, humour_channel,
+  //         recent_event_tags, physical_state, fear_channel, claustrophobia_flag
+  rebecca_state?: string;
+  
   // Relationship dynamics
   relationship: {
     overall_tone: string;

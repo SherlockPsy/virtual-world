@@ -355,3 +355,35 @@ export function buildRecentTranscript(
   
   return transcript;
 }
+
+// ============================================
+// REBECCA EXPRESSION ENGINE LLM CALL
+// Per BUILDER_INSTRUCTIONS.md Section 7
+// ============================================
+
+/**
+ * Complete a Rebecca expression prompt.
+ * Uses the model and parameters specified in BUILDER_INSTRUCTIONS.md:
+ * - Model: gpt-4o (spec says gpt-5.1, but using production model)
+ * - Temperature: 0.85
+ * - Top-p: 1
+ * - Max tokens: 500 (Rebecca's output should be concise)
+ */
+export async function completeRebeccaExpression(
+  prompt: Array<{ role: 'system' | 'user' | 'assistant'; content: string }>
+): Promise<string> {
+  console.log('[REBECCA EXPRESSION] Calling LLM with', prompt.length, 'messages');
+  
+  const response = await openai.chat.completions.create({
+    model: MODEL, // gpt-4o in production
+    messages: prompt,
+    temperature: 0.85,
+    top_p: 1,
+    max_tokens: 500,
+  });
+
+  const content = response.choices[0]?.message?.content || '';
+  console.log('[REBECCA EXPRESSION] Got response:', content.length, 'chars');
+  
+  return content;
+}

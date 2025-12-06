@@ -68,12 +68,30 @@ function loadDataFile(filename: string): string {
   }
 }
 
+// Load logic files (identity files, engines, layers)
+function loadLogicFile(relativePath: string): string {
+  const baseDir = getBaseDir();
+  const filePath = path.join(baseDir, relativePath);
+  try {
+    console.log(`Loading logic file from: ${filePath}`);
+    const content = fs.readFileSync(filePath, 'utf-8');
+    console.log(`Successfully loaded logic file: ${relativePath} (${content.length} chars)`);
+    return content;
+  } catch (err) {
+    console.error(`Failed to load logic file: ${relativePath} at ${filePath}`, err);
+    return '';
+  }
+}
+
 // Build the full system prompt with all injected context
 function buildSystemPrompt(worldState: HydrationState): string {
   const basePrompt = loadPromptFile('SYSTEM_PROMPT_VIRLIFE.md');
   const logic = loadDataFile('LOGIC.md');
   const baseline = loadDataFile('Sim Baseline.txt');
-  const rebeccaFingerprint = loadDataFile('Rebecca_Fingerprint.json');
+  // Load the FULL fingerprint from logic/identity (not the compressed one in data/)
+  const rebeccaFingerprint = loadLogicFile('logic/identity/Rebecca_Fingerprint_v5.0.json');
+  // Load the linguistic engine (was missing before!)
+  const rebeccaLinguisticEngine = loadLogicFile('logic/engines/Rebecca_Linguistic_Engine.md');
   const georgeProfile = loadDataFile('George_Profile.txt');
 
   // Replace placeholders in the system prompt
@@ -92,6 +110,12 @@ function buildSystemPrompt(worldState: HydrationState): string {
   fullPrompt = fullPrompt.replace(
     '<<PASTE THE FULL CONTENTS OF "Rebecca_Fingerprint.json" HERE>>',
     rebeccaFingerprint
+  );
+
+  // Also inject the linguistic engine (critical for Rebecca's speech!)
+  fullPrompt = fullPrompt.replace(
+    '<<PASTE THE FULL CONTENTS OF "Rebecca_Linguistic_Engine.md" HERE>>',
+    rebeccaLinguisticEngine
   );
   
   fullPrompt = fullPrompt.replace(

@@ -248,41 +248,117 @@ export function validateAgentOutput(agentId: string, output: string): { valid: b
     return { valid: false, issues: ['Agent identity not found'] };
   }
 
-  // Check for generic patterns that should be rejected
+  // ============================================
+  // GENERIC PATTERN DETECTION (HARD REJECT)
+  // ============================================
+  
+  // Generic romance-bot patterns
   const genericPatterns = [
-    /it feels like home already/i,
-    /what's on your mind\??/i,
-    /i'm here for you/i,
-    /anything you want to talk about\??/i,
-    /how are you feeling\??$/i,
-    /tell me more about that/i,
+    { pattern: /it feels like home already/i, desc: 'generic "feels like home"' },
+    { pattern: /what's on your mind\??/i, desc: 'generic therapy-speak "what\'s on your mind"' },
+    { pattern: /what is on your mind\??/i, desc: 'generic therapy-speak' },
+    { pattern: /i'm here for you/i, desc: 'generic reassurance "I\'m here for you"' },
+    { pattern: /i am here for you/i, desc: 'generic reassurance' },
+    { pattern: /anything you want to talk about\??/i, desc: 'generic therapy prompt' },
+    { pattern: /how are you feeling\??$/i, desc: 'generic check-in question' },
+    { pattern: /tell me more about that/i, desc: 'generic therapy prompt' },
+    { pattern: /whenever you're ready/i, desc: 'generic patience statement' },
+    { pattern: /whenever you are ready/i, desc: 'generic patience statement' },
+    { pattern: /take your time/i, desc: 'generic patience statement' },
+    { pattern: /i understand how you feel/i, desc: 'generic empathy statement' },
+    { pattern: /that must be hard/i, desc: 'generic empathy statement' },
+    { pattern: /i can only imagine/i, desc: 'generic empathy statement' },
+    { pattern: /you're so brave/i, desc: 'generic reassurance' },
+    { pattern: /you are so brave/i, desc: 'generic reassurance' },
+    { pattern: /like secret agents/i, desc: 'generic rom-com trope' },
+    { pattern: /oversized sunglasses and hat/i, desc: 'generic celebrity cliche' },
+    { pattern: /your wish is my command/i, desc: 'generic romance-bot' },
+    { pattern: /anything for you/i, desc: 'generic romance-bot' },
   ];
 
-  for (const pattern of genericPatterns) {
+  for (const { pattern, desc } of genericPatterns) {
     if (pattern.test(output)) {
-      issues.push(`Contains generic pattern: ${pattern.source}`);
+      issues.push(`Contains generic pattern: ${desc}`);
     }
   }
 
-  // Check for Rebecca-specific requirements (if agent is Rebecca)
+  // ============================================
+  // REBECCA-SPECIFIC VALIDATION
+  // ============================================
+  
   if (agentId.toLowerCase() === 'rebecca') {
-    // Check for lack of personality markers
-    const hasHumour = /squint|brow|corner of.*mouth|teasing|bloody|fucking|damn|christ/i.test(output);
-    const hasPhysicality = /lean|step|bump|touch|hand|shoulder|hip|mug|coffee|kitchen/i.test(output);
-    const hasDirectness = /look,|here's the|the thing is|actually|honestly|truth is/i.test(output);
-
-    if (!hasHumour && !hasPhysicality && !hasDirectness) {
-      issues.push('Output lacks Rebecca signature markers (humour, physicality, or directness)');
+    // Extract just Rebecca's dialogue (after "Rebecca:" labels)
+    const rebeccaDialogue = output.match(/Rebecca:\s*"([^"]+)"/g)?.join(' ') || '';
+    const hasSignificantDialogue = rebeccaDialogue.length > 20;
+    
+    if (hasSignificantDialogue) {
+      // Check for Rebecca signature markers in her speech
+      const hasHumour = /squint|brow|corner of.*mouth|teasing|wry|dry|bloody|fucking|damn|christ|god\s|bollocks|arse|ridiculous/i.test(rebeccaDialogue);
+      const hasDirectness = /look,|here's the|the thing is|actually,|honestly,|truth is|right,|fine\.|okay\./i.test(rebeccaDialogue);
+      const hasSelfInterruption = /wait,|no—|actually—|—|I mean,/i.test(rebeccaDialogue);
+      const hasBluntness = /you know|that's|that is|not going to|won't|can't|shouldn't|don't|do not/i.test(rebeccaDialogue);
+      
+      // Need at least one marker in substantial dialogue
+      if (!hasHumour && !hasDirectness && !hasSelfInterruption && !hasBluntness) {
+        issues.push('Rebecca dialogue lacks signature markers (humour, directness, self-interruption, or bluntness)');
+      }
+      
+      // Check for PR-speak in Rebecca's dialogue
+      const prPatterns = [
+        /i appreciate that/i,
+        /thank you for sharing/i,
+        /that sounds wonderful/i,
+        /how lovely/i,
+        /that's so sweet/i,
+        /that is so sweet/i,
+        /you're too kind/i,
+        /you are too kind/i,
+      ];
+      
+      for (const pattern of prPatterns) {
+        if (pattern.test(rebeccaDialogue)) {
+          issues.push('Rebecca dialogue contains PR-speak, violating her blunt Swedish-English style');
+        }
+      }
+    }
+    
+    // Check for physicality in narration (not dialogue)
+    const narrationOnly = output.replace(/Rebecca:\s*"[^"]+"/g, '');
+    const hasPhysicality = /lean|step|bump|touch|hand|shoulder|hip|mug|coffee|kitchen|window|counter|chair|sofa|couch|door|walk|stand|sit|move|turn|glance|look/i.test(narrationOnly);
+    
+    // Only require physicality if there's substantial narration
+    if (narrationOnly.length > 100 && !hasPhysicality) {
+      issues.push('Output lacks physical grounding in narration');
     }
   }
 
-  // Check against negative space rules
+  // ============================================
+  // NEGATIVE SPACE VIOLATIONS
+  // ============================================
+  
   for (const rule of identity.negativeSpace) {
-    if (rule.toLowerCase().includes('cruelty') && /humiliat|mock|demean/i.test(output)) {
-      issues.push(`Violates negative space: ${rule}`);
+    const ruleLower = rule.toLowerCase();
+    
+    // Check for cruelty/manipulation
+    if (ruleLower.includes('cruelty') || ruleLower.includes('manipulat')) {
+      if (/humiliat|mock|demean|belittl|cruel/i.test(output)) {
+        issues.push(`Violates negative space: ${rule}`);
+      }
     }
-    if (rule.toLowerCase().includes('generic') && issues.length > 0) {
-      issues.push(`Violates negative space: ${rule}`);
+    
+    // Check for corporate PR-speak
+    if (ruleLower.includes('corporate') || ruleLower.includes('pr-speak') || ruleLower.includes('pr speak')) {
+      if (/synergy|leverage|optimize|circle back|touch base|moving forward/i.test(output)) {
+        issues.push(`Violates negative space: ${rule}`);
+      }
+    }
+    
+    // Check for emotional dishonesty
+    if (ruleLower.includes('emotional dishonesty')) {
+      if (/everything is fine|nothing is wrong|i'm fine|don't worry about/i.test(output) && 
+          /clearly|obviously|visibly/.test(output)) {
+        issues.push(`Possible emotional dishonesty pattern`);
+      }
     }
   }
 

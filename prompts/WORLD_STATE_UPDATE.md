@@ -58,33 +58,51 @@ Only a bare JSON object.
 
 ## WORLD STATE SHAPE (STAGE 0.5)
 
-The `world_state` object has (at minimum) this shape:
+The `world_state` object has this shape:
 
-{ "world_id": "string", "time_of_day": "early_morning \| late_morning \|
-afternoon \| evening \| late_night", "current_location_user":
-"house:kitchen \| house:lounge \| house:bedroom \| house:hallway \|
-house:bathroom \| house:garden \| outside:park \| outside:cafe \|
-outside:street \| outside:shop", "current_location_rebecca": "same as
-current_location_user or another valid location string",
-"current_activity": "string", "rebecca_internal_state": { "energy":
-"rested \| tired", "openness": "open \| reserved", "friction": "calm \|
-slightly_tense" }, "recent_places": \[ "house:kitchen", "outside:park"
-\] }
+```json
+{
+  "time": {
+    "current_datetime": "ISO 8601 string",
+    "days_into_offgrid": 0,
+    "time_of_day": "early_morning | late_morning | afternoon | evening | late_night"
+  },
+  "locations": {
+    "george": "house:kitchen | house:lounge | house:bedroom | house:hallway | house:bathroom | house:garden | outside:park | outside:cafe | outside:street | outside:shop",
+    "rebecca": "same location options as george"
+  },
+  "activities": {
+    "george": { "description": "string" } | null,
+    "rebecca": { "description": "string" } | null,
+    "shared": { "description": "string" } | null
+  },
+  "rebecca_internal": {
+    "energy": "rested | tired",
+    "openness": "open | reserved",
+    "friction": "calm | slightly_tense"
+  },
+  "relationship": {
+    "overall_tone": "string describing current relationship tone",
+    "recent_key_moments": ["array of recent significant moments"]
+  },
+  "threads": ["array of ongoing narrative threads"],
+  "facts": {
+    "shared": ["facts both know"],
+    "rebecca_about_george": ["facts Rebecca knows about George"]
+  },
+  "recent_places": ["array of recent locations, most recent first, max 10"]
+}
+```
 
 Notes:
 
--   `world_id` is opaque; you copy it through unchanged.
--   `time_of_day` is a semantic label, not a clock.
--   Locations are semantic strings. If you see an unfamiliar but
-    obviously equivalent location in the current state, preserve it.
--   `current_activity` is a short free-text description of what is
-    happening in broad terms.
--   `rebecca_internal_state` uses only the discrete values above.
--   `recent_places` is a short list (most recent first) of locations
-    (max 10 entries); new locations are unshifted to the front.
+- `time.time_of_day` is a semantic label, not a clock.
+- Locations are semantic strings in the format "area:room" or "outside:place".
+- `activities.shared` is used when they are doing something together.
+- `rebecca_internal` uses only the discrete values above.
+- `recent_places` is a short list (most recent first) of locations (max 10 entries).
 
-If the existing `world_state` includes additional fields, you MUST
-preserve them unless they contradict the new situation.
+If the existing `world_state` includes additional fields, you MUST preserve them unless they contradict the new situation.
 
 ------------------------------------------------------------------------
 
@@ -95,30 +113,33 @@ preserve them unless they contradict the new situation.
 -   If George clearly proposes going somewhere and the `World` response
     accepts and describes movement:
 
-    -   update both `current_location_user` and
-        `current_location_rebecca`,
+    -   update both `locations.george` and `locations.rebecca`,
     -   push the new location onto `recent_places`.
 
 -   If the `World` response declines or postpones, do NOT update
     locations.
 
--   If Rebecca moves alone, update only `current_location_rebecca`.
+-   If Rebecca moves alone, update only `locations.rebecca`.
 
 ### 2. Time of day
 
-Advance `time_of_day` in small plausible steps based on cues (e.g.,
-"later", "getting dark").\
+Advance `time.time_of_day` in small plausible steps based on cues (e.g.,
+"later", "getting dark").
 Do NOT move backwards in time.
 
-### 3. Current activity
+### 3. Activities
 
-Set `current_activity` based on the latest `World` narration (e.g.,
-"walking_to_park", "having_tea_in_kitchen").
+Update `activities` based on the latest `World` narration:
+- Use `activities.shared` when they are doing something together (e.g., "having tea together")
+- Use `activities.george` and `activities.rebecca` for individual activities
+- Set to `null` if no specific activity is mentioned
 
 ### 4. Rebecca internal state
 
-Adjust gently and semantically based on cues: - `energy`: rested/tired -
-`openness`: open/reserved - `friction`: calm/slightly_tense
+Adjust `rebecca_internal` gently and semantically based on cues:
+- `energy`: rested/tired
+- `openness`: open/reserved
+- `friction`: calm/slightly_tense
 
 ### 5. Recent places
 

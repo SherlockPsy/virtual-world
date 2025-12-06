@@ -279,11 +279,28 @@ ${recentTranscript}
   const content = response.choices[0]?.message?.content || '';
   
   try {
+    // Clean up the response - remove markdown code blocks if present
+    let jsonContent = content.trim();
+    
+    // Remove ```json ... ``` or ``` ... ``` wrapper if present
+    if (jsonContent.startsWith('```')) {
+      const lines = jsonContent.split('\n');
+      // Remove first line (```json or ```)
+      lines.shift();
+      // Remove last line (```)
+      if (lines[lines.length - 1]?.trim() === '```') {
+        lines.pop();
+      }
+      jsonContent = lines.join('\n');
+    }
+    
     // Parse the JSON response
-    const parsed = JSON.parse(content);
+    const parsed = JSON.parse(jsonContent);
+    console.log('[STATE UPDATE] Successfully parsed updated state');
     return parsed as HydrationState;
-  } catch {
+  } catch (parseError) {
     console.error('Failed to parse state update JSON, returning current state');
+    console.error('Parse error:', parseError);
     console.error('Raw response:', content);
     return currentState;
   }

@@ -364,7 +364,8 @@ export async function getOrCreateWorldState(worldId: string): Promise<HydrationS
   );
   
   if (existing) {
-    return existing.state;
+    // Migrate old state format to Stage 0.5 format if needed
+    return migrateWorldState(existing.state);
   }
 
   // Create initial state
@@ -375,6 +376,49 @@ export async function getOrCreateWorldState(worldId: string): Promise<HydrationS
   );
   
   return initialState;
+}
+
+// Migrate old world state format to Stage 0.5 format
+function migrateWorldState(state: any): HydrationState {
+  // If already has Stage 0.5 fields, return as-is
+  if (state.activities && state.rebecca_internal && state.time?.time_of_day) {
+    return state as HydrationState;
+  }
+
+  // Migrate from Stage 0 to Stage 0.5
+  const migratedState: HydrationState = {
+    time: {
+      current_datetime: state.time?.current_datetime || "2025-07-01T08:00:00Z",
+      days_into_offgrid: state.time?.days_into_offgrid || 0,
+      time_of_day: state.time?.time_of_day || getTimeOfDayFromDatetime(state.time?.current_datetime || "2025-07-01T08:00:00Z")
+    },
+    locations: {
+      george: (state.locations?.george || "house:kitchen") as Location,
+      rebecca: (state.locations?.rebecca || "house:kitchen") as Location
+    },
+    activities: state.activities || {
+      george: null,
+      rebecca: { description: "making coffee" },
+      shared: null
+    },
+    rebecca_internal: state.rebecca_internal || {
+      energy: "rested",
+      openness: "open",
+      friction: "calm"
+    },
+    relationship: state.relationship || {
+      overall_tone: "warm, intimate, newly cohabiting",
+      recent_key_moments: ["Rebecca just moved in with George"]
+    },
+    threads: state.threads || ["Rebecca settling into the house"],
+    facts: state.facts || {
+      shared: ["This is their house in Cookridge"],
+      rebecca_about_george: []
+    },
+    recent_places: state.recent_places || ["house:kitchen"]
+  };
+
+  return migratedState;
 }
 
 // Update world state

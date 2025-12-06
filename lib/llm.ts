@@ -92,6 +92,8 @@ function buildSystemPrompt(worldState: HydrationState): string {
   const rebeccaFingerprint = loadLogicFile('logic/identity/Rebecca_Fingerprint_v5.0.json');
   // Load the linguistic engine (was missing before!)
   const rebeccaLinguisticEngine = loadLogicFile('logic/engines/Rebecca_Linguistic_Engine.md');
+  // Load the expression engine (controls HOW Rebecca expresses herself each turn)
+  const rebeccaExpressionEngine = loadPromptFile('Rebecca_Expression_Engine.md');
   const georgeProfile = loadDataFile('George_Profile.txt');
 
   // Replace placeholders in the system prompt
@@ -116,6 +118,13 @@ function buildSystemPrompt(worldState: HydrationState): string {
   fullPrompt = fullPrompt.replace(
     '<<PASTE THE FULL CONTENTS OF "Rebecca_Linguistic_Engine.md" HERE>>',
     rebeccaLinguisticEngine
+  );
+
+  // Inject the expression engine (controls HOW Rebecca modulates expression each turn)
+  // This goes AFTER the linguistic engine as per integration requirements
+  fullPrompt = fullPrompt.replace(
+    '<<PASTE THE FULL CONTENTS OF "Rebecca_Expression_Engine.md" HERE>>',
+    rebeccaExpressionEngine
   );
   
   fullPrompt = fullPrompt.replace(

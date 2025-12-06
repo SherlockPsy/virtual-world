@@ -130,14 +130,9 @@ function buildSystemPrompt(worldState: HydrationState): string {
   const worldContext = buildWorldContext(worldState);
   fullPrompt += `\n\n---\n\n## WORLD CONTEXT SUMMARY\n\n${worldContext}\n`;
 
-  // IDENTITY ENFORCEMENT LAYER - Inject identity enforcement context
-  if (IDENTITY_ENFORCEMENT_ENABLED) {
-    const identityEnforcement = buildIdentityEnforcementPrompt('rebecca');
-    if (identityEnforcement) {
-      fullPrompt += `\n\n${identityEnforcement}`;
-      console.log('Identity Enforcement Layer ACTIVE');
-    }
-  }
+  // NOTE: Identity enforcement is now done via validation loop, not prompt injection
+  // The fingerprint and linguistic engine are already embedded in the system prompt
+  // via the <<PASTE...>> placeholders above
 
   return fullPrompt;
 }
